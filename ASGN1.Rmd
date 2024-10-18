@@ -1,0 +1,405 @@
+---
+title: "Computational Statistics Assignment 1"
+author: "James Oduro Ntiamoah (202385922) and Muhammed Haroon (202386525)"
+date: "2024-10-05"
+output:
+  pdf_document: default
+  html_document: default
+css: styles.css
+fontsize: 12.0pt
+linestretch: 1.5
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r include=FALSE}
+
+# Queation 1
+
+#a.
+
+#Using the inversion method
+
+n=10      #Trials
+p=1/3     #Probability
+
+s_binomial <- function(n, p) {
+  u_rv <- runif(1)  # Generating a uniform random variable
+  cdf <- 0       # Initializing the CDF
+  for (x in 0:n) {
+    cdf <- cdf + dbinom(x, n, p)  # Update the CDF
+    if (u_rv <= cdf) {
+      return(x)  # Return the smallest x such that P(X ≤ x) ≥ u
+    }
+  }
+}
+set.seed(425)
+# To generate 1000 samples
+Inversion_sample <- replicate(1000, s_binomial(n, p))
+
+# Plotting the histogram of the Inversion_sample
+hist(Inversion_sample, breaks=seq(-0.5, 10.5, 1), freq = F, col='grey', 
+     main='Histogram of Inversion Samples', 
+     xlab='Value')
+points(0:n, dbinom(0:n,n,p),col="red", pch=19)
+lines(0:n,dbinom(0:n,n,p),lwd=2)
+
+#b 
+
+sb_uniform <- function(n, p) {
+  # To generate n Uniform[0,1] random variables
+  u <- runif(n)
+  sum(u <= p)
+}
+# To generate 1000 samples
+set.seed(125)
+s_uniform <- replicate(1000, sb_uniform(n, p))
+
+#To plot the histogram of the samples
+hist(s_uniform, breaks=seq(-0.5, 10.5, 1), freq = F, col='grey', 
+     main='Histogram of Transformation Samples', 
+     xlab='Value')
+points(0:n, dbinom(0:n,n,p),col="red", pch=19)
+lines(0:n,dbinom(0:n,n,p),lwd=2)
+
+#c 
+# To generate 100 samples using the inversion method
+set.seed(425)
+new_samples<- replicate(100, s_binomial(n, p))
+
+#To estimate the expectation
+Mean_estimate <- mean(new_samples)
+
+# For Standard error
+SE <- sd(new_samples) / sqrt(length(new_samples))
+
+# 95% confidence interval
+lower <- Mean_estimate - 1.96 * SE
+upper <- Mean_estimate + 1.96 * SE
+
+# Output
+list(
+  Expectation = Mean_estimate,
+  standard_error = SE,
+  confidence_bounds = c(lower, upper)
+)
+
+
+
+#Question 2
+
+# To generate Poisson(t) random variables
+sample_poisson <- function(t) {
+  sum_expo <- 0  # Initialize sum of exponential variables
+  k <- 0  # Initialize count of Poisson events
+  
+  while (sum_expo <= t) {
+    u <- runif(1)  # Generate uniform random variable
+    sum_expo <- sum_expo - log(u)  # Generate exponential(1) using transformation
+    if (sum_expo <= t) {
+      k <- k + 1  # Count the number of exponentials summed before exceeding t
+    }
+  }
+  
+  return(k)
+}
+
+# Set parameter t
+t <- 1
+
+# Generate 1000 samples
+set.seed(225)
+samples_poisson <- replicate(1000, sample_poisson(t))
+
+# Plotting the histogram of 1000 Poisson(1) samples
+hist(samples_poisson, breaks=seq(-0.5, max(samples_poisson)+0.5, 1), col='grey', 
+     main='Histogram of Poisson(1) Samples', 
+     xlab='Value', freq=FALSE)
+points(0:max(samples_poisson), dpois(0:max(samples_poisson),lambda=1), col='blue', pch=19)  
+lines(0:max(samples_poisson),dpois(0:max(samples_poisson),lambda=1), col="red" ,lwd=2)
+
+#To compute the mean, standard error, and confidence interval
+compute_statistics <- function(samples) {
+  poisson_mean <- mean(samples)
+  se <- sd(samples) / sqrt(length(samples))
+  
+  # 95% confidence interval
+  lower_bound <- poisson_mean - 1.96 * se
+  upper_bound <- poisson_mean + 1.96 * se
+  
+  return(list(
+    poisson_mean = poisson_mean,
+    standard_error = se,
+    confidence_interval = c(lower_bound, upper_bound))
+  )
+}
+
+# Estimate mean and confidence intervals for different sample sizes
+set.seed(425)
+for (n_samples in c(10, 100, 1000, 10000)) {
+  samples_n <- replicate(n_samples, sample_poisson(1))
+  stats <- compute_statistics(samples_n)
+  
+  cat("\nSample size:", n_samples)
+  cat("\nMean estimate:", stats$poisson_mean)
+  cat("\nStandard error:", stats$standard_error)
+  cat("\n95% confidence interval:", stats$confidence_interval, "\n")
+}
+
+#Question 3
+
+# Target mixture density function
+mixture_density <- function(x) {
+  alpha_1 <- 0.2
+  alpha_2 <- 0.8
+  d_1 <- dnorm(x, mean = 1, sd = sqrt(0.5))
+  d_2 <- dnorm(x, mean = 2, sd = sqrt(0.1))
+  return(alpha_1 * d_1 + alpha_2 * d_2)
+}
+
+# Proposal density function (N(1.8, 0.5))
+proposal_density <- function(x) {
+  dnorm(x, mean = 1.8, sd = sqrt(0.5))
+}
+
+# Find an upper bound for M
+M <- 1.5  # Rough upper bound for f(x) / g(x)
+
+# Rejection sampling function
+rejection_sampler <- function(n_samples) {
+  samples <- numeric(n_samples)
+  accepted <- 0
+  for (i in 1:n_samples) {
+    repeat {
+      x <- rnorm(1, mean = 1.8, sd = sqrt(0.5))  # Sample from proposal distribution
+      u <- runif(1)  # Uniform random variable for acceptance
+      if (u <= mixture_density(x) / (M * proposal_density(x))) {
+        samples[i] <- x
+        accepted <- accepted + 1
+        break
+      }
+    }
+  }
+  acceptance_rate <- accepted / (n_samples * M)
+  return(list(samples = samples, acceptance_rate = acceptance_rate))
+}
+set.seed(123)
+# Run rejection sampling and generate 10000 samples
+n_samples <- 10000
+result <- rejection_sampler(n_samples)
+
+# Extract samples and acceptance rate
+samples <- result$samples
+acceptance_rate <- result$acceptance_rate
+
+# Plot histogram of samples
+hist(samples, col = 'grey', breaks = 50, freq = FALSE, main = 'Rejection Sampling from Mixture of Normals')
+curve(mixture_density, add = TRUE, col = 'blue', lwd = 2)  # Overlay target density
+
+# Print acceptance rate
+cat("Acceptance rate:", acceptance_rate, "\n")
+
+#Sanity Check
+composition_sampler <- function(n_samples) {
+  samples <- numeric(n_samples)
+  for (i in 1:n_samples) {
+    if (runif(1) < 0.2) {
+      samples[i] <- rnorm(1, mean = 1, sd = sqrt(0.5))
+    } else {
+      samples[i] <- rnorm(1, mean = 2, sd = sqrt(0.1))
+    }
+  }
+  return(samples)
+}
+
+# Generate 10000 samples using the composition method
+samples_composition <- composition_sampler(n_samples)
+
+# Plot histogram for comparison
+hist(samples_composition, breaks = 50, col = 'grey', freq = FALSE, main = 'Composition Method')
+curve(mixture_density(x), add = TRUE, col = 'blue', lwd = 2)
+
+# (b)
+
+```
+
+# Quesation 1
+
+# (a)
+
+```{r echo=FALSE}
+hist(Inversion_sample, breaks=seq(-0.5, 10.5, 1), freq = F, col='grey', 
+     main='Histogram of Inversion Samples', 
+     xlab='Value')
+points(0:n, dbinom(0:n,n,p),col="red", pch=19)
+lines(0:n,dbinom(0:n,n,p),lwd=2)
+```
+
+# (b)
+
+```{r echo=FALSE}
+hist(s_uniform, breaks=seq(-0.5, 10.5, 1), freq = F, col='grey', 
+     main='Histogram of Transformation Samples', 
+     xlab='Value')
+points(0:n, dbinom(0:n,n,p),col="red", pch=19)
+lines(0:n,dbinom(0:n,n,p),lwd=2)
+```
+
+
+Proof
+
+Each $u_i \sim U(0,1)$ has uniform distribution on $[0,1]$
+
+The probability $P(u_i\leq p) =p$, because the CDF of $U$ is $F(u)=u$
+
+$P(u_i\leq p)=p$
+
+The comparison u_1<=p returns TRUE  (which counts as a success) with probability $p$ and FALSE
+(failure) with probability $1-p$
+
+
+
+
+
+
+
+
+## (c)
+
+As the case is a discrete case, the expectation can be expressed as follows:
+
+$E[X] = \sum_{k=0}^{n} kP(X=k)$
+
+where the P(X=k) is the probability of obtaining k successes in n trials.
+
+Therefore, we can estimate the expectation from the distribution by finding the mean of those sample 
+values. We will eventually find a sample mean that is close to the true mean value as n increases,
+according to the law of large numbers.
+
+ $\text{Standard Deviation}=\text{S.D}=\sqrt{\dfrac{1}{n-1} \sum_{i=1}^{n} (x_i - \bar{x})^2}$
+ 
+ $\text{Standard Error}=\text{SE}=\dfrac{SD}{\sqrt{N}}$
+ 
+ The standard error measures the variability of the expectation. The SD is the sample standard deviation with the formula given above, whereas N is the number of samples.
+ 
+
+As far as Confidence intervals in concerned as we are using 100 samples, which are more than 30 samples, we can apply the central limit theorem, which states that the distribution of sample mean should be a normal distribution. Therefore, the CI can be calculated as:
+
+$\text{Confidence Interval}=\bar{x} \pm z_{a/2} \cdot SE$
+
+
+-The expectation is `r Mean_estimate`
+
+-The standard error  is `r SE`
+
+-The confidence bound  is `r c(lower, upper)` 
+
+
+
+# Question 2
+
+
+```{r echo=FALSE}
+hist(samples_poisson, breaks=seq(-0.5, max(samples_poisson)+0.5, 1), col='grey', 
+     main="Histogram of 1000 Poisson Samples", 
+     xlab="Value", freq=FALSE)
+points(0:max(samples_poisson), dpois(0:max(samples_poisson),lambda=1), col='blue', pch=19)
+lines(0:max(samples_poisson),dpois(0:max(samples_poisson),lambda=1), col="red" ,lwd=2)
+
+
+ for (n_samples in c(10, 100, 1000, 10000)) {
+  samples_n <- replicate(n_samples, sample_poisson(1))
+  stats <- compute_statistics(samples_n)
+  
+  cat("\nSample size:", n_samples)
+  cat("\nMean estimate:", stats$poisson_mean)
+  cat("\nStandard error:", stats$standard_error)
+  cat("\n95% confidence interval:", stats$confidence_interval, "\n")
+}
+```
+
+
+# Question 3
+
+## (a)
+
+The Proposal Density Function
+
+We need to choose a proposal distribution which has a broader range to cover both component distributions. 
+
+From the mixture:
+
+$N(1, 0.5)$ with weight $\alpha_1=0.2$
+
+$N(2, 0.1)$ with weight $\alpha_2=0.8$
+
+Proposal Mean:
+
+$\mu_{proposal}= 0.2\cdot1+ 0.8\cdot2= 1.8$
+
+Proposed Variance:
+
+$\sigma^2_{proposal} = max(0.5, 1)= 0.5$
+
+Hence, the proposal density function follows $N(1.8, 0.5)$ 
+
+
+```{r echo=FALSE}
+# Plot histogram of samples
+hist(samples, breaks = 50, col = 'grey', freq = FALSE, main = 'Rejection Sampling from Mixture of Normals')
+curve(mixture_density(x), add = TRUE, col = 'blue', lwd = 2)  # Overlay target density
+
+# Print acceptance rate
+cat("Acceptance rate:", acceptance_rate, "\n")
+```
+
+
+# For Sanity Check
+
+```{r echo=FALSE}
+
+# Plot histogram for comparison
+hist(samples_composition, breaks = 50, col = 'grey', freq = FALSE, main = 'Composition Method')
+curve(mixture_density(x), add = TRUE, col = 'blue', lwd = 2)
+```
+
+
+## (b) 
+
+
+  $Y \sim \text{Exponential}(\lambda)$
+
+  $\Rightarrow f_Y(y) = \lambda e^{-\lambda y}, \quad y \geq 0$
+  
+  $X= Y + a$
+  
+  The PDF of X  using a shift in the variable Y is
+  
+  $f_X(x)= f_Y(x-a)=\lambda e^{-\lambda(x-a)}, \quad y \geq 0$
+  
+  Rejection Sampling
+  
+ Accept $X$ if $U \leq \dfrac{f_X(x)}{Mf_Y(y)}$
+  
+
+  
+  $M=\dfrac{\lambda e^{-\lambda(x-a)}}{\lambda e^{-\lambda y}}$
+  
+  $M=\dfrac{ e^{-\lambda(x)} e^{\lambda(a)}} { e^{-\lambda(x)}}$
+    
+  $M=e^{\lambda(a)}$
+
+As $a$ grows, $M$ increases exponentially, and as a result, the rejection rate increases, making the algorithm less efficient.
+
+This is so because the probability of acceptance is inversely proportional to $M$, meaning the larger $a$ becomes, the less likely it is to accept the sample.
+
+
+```{r include=TRUE}
+[Link to R code](https://github.com/Amankuo19/Computational-stat-Assignment1/blob/main/CompAssig1Solution.Rmd)
+
+```
+
+
